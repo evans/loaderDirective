@@ -43,12 +43,24 @@ const createLoaderDirective = (load: DataLoader.BatchLoadFn<any, any>) => {
                   elem.startsWith('context.') ||
                   elem.startsWith('info.')
                 ) {
-                  return eval(elem);
+                  const result = eval(elem);
+                  if (!result) console.warn(`${elem} is ${result}`);
+                  return result;
                   //OPTION 1
                 } else if (elem.startsWith('$')) {
-                  return args[elem.substring(1)];
+                  const result = args[elem.substring(1)];
+                  if (!result)
+                    console.warn(`args.${elem.substring(1)} is ${result}`);
+                  return result;
                 } else {
-                  return root[elem] || args[elem];
+                  const result = root[elem] || args[elem];
+                  if (!result)
+                    console.warn(
+                      `root.${elem} is ${root[elem]} and args.${elem} is ${
+                        args[elem]
+                      }`,
+                    );
+                  return result;
                 }
               }
               return elem;
@@ -111,7 +123,7 @@ const typeDefs = gql`
 
     #OPTION 2
     #We explicitly provide where we generate the id passed to dataloader
-    v2_fortune_root: Fortune! @get(id: "fortunes/{root.id.hi}")
+    v2_fortune_root: Fortune! @get(id: "fortunes/{root.id}")
     v2_fortune_args(id: String!): Fortune! @get(id: "fortunes/{args.id}")
     v2_fortune_context: Fortune! @get(id: "fortunes/{context.id}")
     v2_fortune_info: Fortune! @get(id: "fortunes/{info.id}")
@@ -173,7 +185,6 @@ const fetcher = (url: string) => (ids: any[]) => {
         .then(res => JSON.parse(res))
         .then(res => {
           if (!res.id) res.id = id;
-          // console.log('fetched', res);
           return res;
         });
     }),
