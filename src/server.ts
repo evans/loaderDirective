@@ -45,7 +45,6 @@ server.use(
       rootValue,
       context,
       tracing: true,
-      debug: true,
     };
   }),
 );
