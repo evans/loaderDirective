@@ -6,6 +6,7 @@ import {
 import DataLoader from 'dataloader';
 import fetch from 'node-fetch';
 import {
+  GraphQLResolveInfo,
   GraphQLArgument,
   GraphQLDirective,
   GraphQLEnumType,
@@ -46,9 +47,57 @@ const deprecated = (defaultMessage: string) => {
       // Add some metadata to the object that the GraphQL server
       // can use later to display deprecation warnings.
       thing.isDeprecated = true;
+      console.log('reason', this.args.reason);
       thing.deprecationReason = this.args.reason || defaultMessage;
     }
   };
+};
+
+interface ResolverArguments {
+  root: any;
+  directiveArgs: { [argName: string]: any };
+  resolverArgs: { [argName: string]: any };
+  context: any;
+  info: GraphQLResolveInfo;
+  field: GraphQLField<any, any>;
+}
+
+type DirectiveResolver = (src: any, options: ResolverArguments) => any;
+
+const createStack = (stack: Array<DirectiveResolver>) =>
+  class DirectiveStack extends SchemaDirectiveVisitor {
+    visitFieldDefinition(field: GraphQLField<any, any>) {
+      const resolve = field.resolve || defaultFieldResolver;
+      field.resolve = (root, args, context, info) => {
+        return stack.reduce(
+          (prev, next) =>
+            prev.then(res =>
+              next(res, {
+                root,
+                resolverArgs: args,
+                directiveArgs: this.args,
+                context,
+                info,
+                field,
+              }),
+            ),
+          Promise.resolve(resolve(root, args, context, info)),
+        );
+      };
+    }
+  };
+
+const debug: DirectiveResolver = (
+  res,
+  { root, resolverArgs, context, info, field, directiveArgs },
+) => {
+  console.group(`resolver ${field.name}`);
+  console.log('root', root);
+  console.log('args', resolverArgs);
+  // console.log('context', context);
+  // console.log('info', info);
+  console.groupEnd();
+  return res;
 };
 
 class DebugDirective extends SchemaDirectiveVisitor {
@@ -68,6 +117,19 @@ class DebugDirective extends SchemaDirectiveVisitor {
     };
   }
 }
+
+const use: DirectiveResolver = (
+  res,
+  { root, resolverArgs, context, info, field, directiveArgs },
+) => {
+  if (res[directiveArgs.key]) {
+    console.log('use', res[directiveArgs.key]);
+    return res[directiveArgs.key];
+  } else {
+    console.log('use', root[directiveArgs.key]);
+    return root[directiveArgs.key];
+  }
+};
 
 class UseDirective extends SchemaDirectiveVisitor {
   visitFieldDefinition(field: GraphQLField<any, any>) {
@@ -118,7 +180,7 @@ const dataloader = (load: DataLoader.BatchLoadFn<any, any>) => {
           switch (field.astNode.type.kind) {
             case 'ListType':
               return instance
-                .loadMany(key)
+                .loadMany(key || ['res_0'])
                 .then(res => {
                   console.log('load', res);
                   return res;
@@ -126,7 +188,7 @@ const dataloader = (load: DataLoader.BatchLoadFn<any, any>) => {
                 .then(val => resolve(val, args, context, info));
             case 'NamedType':
               return instance
-                .load(key || 1)
+                .load(key || 'res_1')
                 .then(res => {
                   console.log('load', res);
                   return res;
@@ -135,7 +197,7 @@ const dataloader = (load: DataLoader.BatchLoadFn<any, any>) => {
             case 'NonNullType':
               if (field.astNode.type.type.kind === 'ListType') {
                 return instance
-                  .loadMany(key)
+                  .loadMany(key || ['res_0'])
                   .then(res => {
                     console.log('load', res);
                     return res;
@@ -143,7 +205,7 @@ const dataloader = (load: DataLoader.BatchLoadFn<any, any>) => {
                   .then(val => resolve(val, args, context, info));
               } else {
                 return instance
-                  .load(key || 1)
+                  .load(key || 'res_1')
                   .then(res => {
                     console.log('load', res);
                     return res;
@@ -175,11 +237,11 @@ const typeDefs = gql`
 
   type User {
     id: ID! @deprecated(reason: "lol")
-    name: String @deprecated(reason: "lol")
+    name: String @deprecated
     posts: [Post]! @load(root: "postsIds") @log
     game: Game! @load(args: "gameId") @log
     fortune: Fortune! @getFortune @log @stack
-    fortunes: [Fortune]! @getFortune @use(key: "fortune") @log @stack
+    fortunes: [Fortune]! @getFortune @log @stack
   }
 
   type Query {
@@ -197,6 +259,7 @@ const resolvers: IResolvers = {
   },
   User: {
     posts: root => root,
+    fortunes: root => root,
     // fortunes: () => {
     //   return fetch('http://fortunecookieapi.herokuapp.com/v1/cookie')
     //     .then(res => res.json())
