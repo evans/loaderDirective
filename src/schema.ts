@@ -5,26 +5,7 @@ import {
 } from 'graphql-tools';
 import DataLoader from 'dataloader';
 import fetch from 'node-fetch';
-import {
-  GraphQLResolveInfo,
-  GraphQLArgument,
-  GraphQLDirective,
-  GraphQLEnumType,
-  GraphQLEnumValue,
-  GraphQLField,
-  GraphQLInputField,
-  GraphQLInputObjectType,
-  GraphQLInterfaceType,
-  GraphQLNamedType,
-  GraphQLObjectType,
-  GraphQLScalarType,
-  GraphQLSchema,
-  GraphQLUnionType,
-  ListTypeNode,
-  NamedTypeNode,
-  NonNullTypeNode,
-  defaultFieldResolver,
-} from 'graphql';
+import { GraphQLField } from 'graphql';
 import { posts, users } from './data';
 import {
   deprecated,
